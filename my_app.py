@@ -1,38 +1,79 @@
-from collections import namedtuple
-import altair as alt
-import math
-import pandas as pd
+#lanzar con streamlit run streamlit_app.py en el terminal
+
 import streamlit as st
-
-"""
-# Welcome to Streamlit!
-
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:
-
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
-
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+from streamlit_chat import message
+import pandas as pd
+from io import BytesIO
 
 
-with st.echo(code_location='below'):
-    total_points = st.slider("Number of points in spiral", 1, 5000, 2000)
-    num_turns = st.slider("Number of turns in spiral", 1, 100, 9)
+def inicializar_session_state():
+    if "history" not in st.session_state:
+        st.session_state.history = []
 
-    Point = namedtuple('Point', 'x y')
-    data = []
+@st.cache_data
+def convert_df(df):
+    # IMPORTANT: Cache the conversion to prevent computation on every rerun
+    return df.to_csv().encode('utf-8')
 
-    points_per_turn = total_points / num_turns
+def to_excel(df):
+    output = BytesIO()
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    df.to_excel(writer, index=False, sheet_name='Sheet1')
+    workbook = writer.book
+    worksheet = writer.sheets['Sheet1']
+    format1 = workbook.add_format({'num_format': '0.00'})
+    worksheet.set_column('A:A', None, format1)
+    writer.close()
+    processed_data = output.getvalue()
+    return processed_data
 
-    for curr_point_num in range(total_points):
-        curr_turn, i = divmod(curr_point_num, points_per_turn)
-        angle = (curr_turn + 1) * 2 * math.pi * i / points_per_turn
-        radius = curr_point_num / total_points
-        x = radius * math.cos(angle)
-        y = radius * math.sin(angle)
-        data.append(Point(x, y))
 
-    st.altair_chart(alt.Chart(pd.DataFrame(data), height=500, width=500)
-        .mark_circle(color='#0068c9', opacity=0.5)
-        .encode(x='x:Q', y='y:Q'))
+def click():
+    if st.session_state.user != '':
+        pregunta = st.session_state.user
+        respuesta = g.consulta(pregunta,vn)
+        st.session_state.df=respuesta
+
+        st.session_state.preguntas.append(pregunta)
+        st.session_state.respuestas.append(respuesta.to_string())
+        # Limpiar el input de usuario después de enviar la pregunta
+        #st.session_state.user = ''
+    
+        
+
+def main():
+    inicializar_session_state()
+
+    st.title("CHAT RUMAOS")
+    st.write("Puedes hacerme a mi todas las preguntas")
+
+    if 'preguntas' not in st.session_state:
+        st.session_state.preguntas = []
+    if 'respuestas' not in st.session_state:
+        st.session_state.respuestas = []
+        with st.form('addition'):
+            query = st.text_area('¿En qué te puedo ayudar?:', key='user', help='Pulsa Enviar para hacer la pregunta')
+            submit_button = st.form_submit_button('Enviar',on_click=click)
+
+    if st.session_state.preguntas:
+        for i in range(len(st.session_state.respuestas)-1, -1, -1):
+            myDF=st.dataframe(st.session_state.df.style.highlight_max(axis=0), use_container_width=True)
+
+            df_xlsx = to_excel(st.session_state.df)
+            st.download_button(label='Download',
+                               data=df_xlsx ,
+                               file_name= 'df_test.xlsx')
+
+
+    with st.sidebar:
+        # Mostrar la lista usando st.text()
+        for resp in st.session_state.respuestas:
+            st.write(resp)
+
+if __name__ == "__main__":
+    main()
+
+
+        
+
+
